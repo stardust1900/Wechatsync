@@ -314,12 +314,30 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       logger.debug('loadArticle - current tab:', tab?.url)
       if (!tab?.id) return
 
-      const response = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_ARTICLE' })
-      logger.debug('loadArticle - response:', response)
-      if (response?.article) {
-        set({ article: response.article })
-        // 追踪内容特征
-        trackArticleProfile(response.article, 'popup')
+      // 内容脚本仅注入 http/https 页面；chrome://、file://、扩展页等没有接收端，
+      // 直接跳过，避免无意义的 “Receiving end does not exist” 报错
+      const tabUrl = tab.url || tab.pendingUrl || ''
+      if (!/^https?:\/\//i.test(tabUrl)) {
+        logger.debug('loadArticle - skip non-http(s) tab:', tabUrl)
+        return
+      }
+
+      try {
+        const response = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_ARTICLE' })
+        logger.debug('loadArticle - response:', response)
+        if (response?.article) {
+          set({ article: response.article })
+          // 追踪内容特征
+          trackArticleProfile(response.article, 'popup')
+        }
+      } catch (e) {
+        // “Receiving end does not exist” 说明当前页面没注入内容脚本，属正常情况，降级为 debug
+        const msg = (e as Error)?.message || ''
+        if (msg.includes('Receiving end does not exist')) {
+          logger.debug('loadArticle - no content script on tab, skip:', tabUrl)
+        } else {
+          logger.error('Failed to extract article:', e)
+        }
       }
     } catch (error) {
       logger.error('Failed to extract article:', error)

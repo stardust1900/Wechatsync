@@ -1134,31 +1134,7 @@ chrome.runtime.onInstalled.addListener(async details => {
     recordInstallTimestamp().catch(() => {})
   }
 
-  // 升级时打开 changelog 页面
-  if (details.reason === 'update') {
-    const previousVersion = details.previousVersion || '0.0.0'
-    const currentVersion = chrome.runtime.getManifest().version
-
-    // 重要版本升级时显示更新日志
-    const showChangelogVersions = ['2.0.8', '2.0.9']
-    if (
-      showChangelogVersions.includes(currentVersion) ||
-      (previousVersion.startsWith('1.') && currentVersion.startsWith('2.'))
-    ) {
-      chrome.tabs.create({
-        url: 'https://www.wechatsync.com/changelog?from=' + previousVersion + '&to=' + currentVersion,
-        active: true,
-      })
-    }
-  }
-
-  // 首次安装时打开欢迎页
-  if (details.reason === 'install') {
-    chrome.tabs.create({
-      url: 'https://www.wechatsync.com/?utm_source=extension&utm_medium=install',
-      active: true,
-    })
-  }
+  // 注意：安装/升级时不再自动打开任何网页（changelog / 欢迎页均不打开）
 })
 
 /**
