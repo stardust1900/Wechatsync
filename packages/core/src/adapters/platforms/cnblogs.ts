@@ -14,7 +14,7 @@ export class CnblogsAdapter extends CodeAdapter {
     name: '博客园',
     icon: 'https://www.cnblogs.com/favicon.ico',
     homepage: 'https://www.cnblogs.com',
-    capabilities: ['article', 'draft', 'image_upload'],
+    capabilities: ['article', 'draft', 'image_upload', 'table'],
   }
 
   /** 预处理配置: 博客园使用 Markdown 格式 */

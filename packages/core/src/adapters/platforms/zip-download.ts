@@ -23,7 +23,7 @@ export class ZipDownloadAdapter extends CodeAdapter {
     name: 'Markdown 压缩包',
     icon: 'https://cdn-icons-png.flaticon.com/512/337/337946.png',
     homepage: '',
-    capabilities: ['article'],
+    capabilities: ['article', 'table'],
   }
 
   /**

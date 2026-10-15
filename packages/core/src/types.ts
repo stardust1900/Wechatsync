@@ -55,6 +55,7 @@ export type PlatformCapability =
   | 'tags'         // 标签
   | 'cover'        // 封面图
   | 'schedule'     // 定时发布
+  | 'table'        // 正文支持表格（不支持时同步会自动转成文本）
 
 /**
  * 平台元信息

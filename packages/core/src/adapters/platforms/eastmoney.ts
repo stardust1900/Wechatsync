@@ -97,8 +97,10 @@ export class EastmoneyAdapter extends CodeAdapter {
   ];
 
   async checkAuth(): Promise<AuthResult> {
+    logger.debug("[Eastmoney] checkAuth 开始");
     try {
       await this.fetchToken();
+      logger.debug("[Eastmoney] token 已读取，ct/ut 存在，开始调用 getauthorinfo");
 
       const response = await this.runtime.fetch(
         `https://caifuhaoapi.eastmoney.com/api/v2/getauthorinfo?platform=&ctoken=${this.ctoken}&utoken=${this.utoken}`,
@@ -109,42 +111,91 @@ export class EastmoneyAdapter extends CodeAdapter {
         },
       );
 
-      const data = (await response.json()) as {
+      const rawText = await response.text();
+      logger.warn(
+        `[Eastmoney] getauthorinfo status=${response.status} body=${rawText.slice(0, 600)}`,
+      );
+
+      const data = JSON.parse(rawText) as {
         Success: number;
         Result?: {
           accountId?: string;
           accountName?: string;
+          nickName?: string;
+          relatedUid?: string;
           portrait?: string;
         };
       };
 
-      if (data.Success === 1 && data.Result?.accountId) {
+      // 东财 getauthorinfo 的账号标识字段是 relatedUid（accountId 经常为 null），
+      // 只要 Success=1 且能取到账号标识即视为已登录。
+      const result = data.Result
+      const uid = result?.accountId || result?.relatedUid
+      if (data.Success === 1 && uid) {
+        logger.warn("[Eastmoney] 登录校验成功");
         return {
           isAuthenticated: true,
-          userId: data.Result.accountId,
-          username: data.Result.accountName,
-          avatar: data.Result.portrait,
+          userId: uid,
+          username: result?.accountName || result?.nickName || undefined,
+          avatar: result?.portrait || undefined,
         };
       }
 
+      logger.warn(
+        `[Eastmoney] getauthorinfo 未返回有效账号：Success=${data.Success} accountId=${result?.accountId} relatedUid=${result?.relatedUid}`,
+      );
       return { isAuthenticated: false };
     } catch (error) {
-      logger.debug("checkAuth: not logged in -", error);
+      logger.warn("[Eastmoney] checkAuth 异常：", (error as Error).message);
       return { isAuthenticated: false, error: (error as Error).message };
     }
   }
 
-  /** 从 cookie 读取 token */
+  /** 从 cookie 读取 token（兼容不同子域名的存储位置） */
   private async fetchToken(): Promise<void> {
     if (!this.runtime.getCookie) {
       throw new Error("Cookie API 不可用，请先登录东方财富");
     }
 
-    const ctoken = await this.runtime.getCookie(".eastmoney.com", "ct");
-    const utoken = await this.runtime.getCookie(".eastmoney.com", "ut");
+    // 东财登录态 cookie（ct/ut）可能落在不同子域，逐一尝试；
+    // 用无点域名可确保所有子域都命中匹配。
+    const domains = [
+      "eastmoney.com",
+      ".eastmoney.com",
+      "mp.eastmoney.com",
+      "caifuhaoapi.eastmoney.com",
+      "emfront.eastmoney.com",
+    ];
+    const getCookie = this.runtime.getCookie;
+    const readCookie = async (name: string): Promise<string | null> => {
+      for (const d of domains) {
+        try {
+          const v = await getCookie(d, name);
+          if (v) return v;
+        } catch {
+          /* 忽略单个域名读取失败，继续尝试下一个 */
+        }
+      }
+      return null;
+    };
+
+    const ctoken = await readCookie("ct");
+    const utoken = await readCookie("ut");
 
     if (!ctoken || !utoken) {
-      throw new Error("未检测到登录信息，请先登录东方财富");
+      // 诊断：列出 eastmoney 域下所有 cookie 名，便于排查命名/域名不匹配
+      let cookieList = "(无法列举)";
+      try {
+        const all = await this.runtime.cookies.get("eastmoney.com");
+        cookieList =
+          all.map((c) => `${c.domain}/${c.name}`).join(", ") || "(无)";
+      } catch {
+        /* ignore */
+      }
+      const found = `ct=${ctoken ? "Y" : "N"} ut=${utoken ? "Y" : "N"}`;
+      const msg = `未检测到东财登录 token（${found}）。eastmoney 域下 cookie：${cookieList}`;
+      logger.warn(`[Eastmoney] ${msg}`);
+      throw new Error(msg);
     }
 
     this.ctoken = ctoken;

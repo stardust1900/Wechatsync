@@ -10,7 +10,7 @@ export class ImoocAdapter extends CodeAdapter {
     name: '慕课手记',
     icon: 'https://www.imooc.com/favicon.ico',
     homepage: 'https://www.imooc.com/article',
-    capabilities: ['article', 'draft', 'image_upload'],
+    capabilities: ['article', 'draft', 'image_upload', 'table'],
   }
 
   /** 预处理配置: 慕课网使用 Markdown 格式 */

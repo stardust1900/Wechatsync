@@ -96,8 +96,13 @@ class AdapterRegistry {
    */
   getPreprocessConfig(platformId: string): PreprocessConfig {
     const entry = this.adapters.get(platformId)
+    // 平台若不支持表格（capabilities 不含 'table'），自动把正文里的表格
+    // 转为文本，避免同步到不支持表格的平台时格式混乱。适配器仍可在
+    // preprocessConfig 中显式覆盖 convertTablesToText。
+    const supportsTable = entry?.meta?.capabilities?.includes('table') ?? false
     return {
       ...DEFAULT_PREPROCESS_CONFIG,
+      convertTablesToText: !supportsTable,
       ...(entry?.preprocessConfig || {}),
     }
   }

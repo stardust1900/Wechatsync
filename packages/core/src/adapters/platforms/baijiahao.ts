@@ -20,7 +20,7 @@ export class BaijiahaoAdapter extends CodeAdapter {
     name: '百家号',
     icon: 'https://www.baidu.com/favicon.ico',
     homepage: 'https://baijiahao.baidu.com/',
-    capabilities: ['article', 'draft', 'image_upload'],
+    capabilities: ['article', 'draft', 'image_upload', 'table'],
   }
 
   /** 预处理配置: 百家号使用 HTML 格式 */

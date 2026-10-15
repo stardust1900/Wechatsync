@@ -10,7 +10,7 @@ export class OschinaAdapter extends CodeAdapter {
     name: '开源中国',
     icon: 'https://www.oschina.net/favicon.ico',
     homepage: 'https://my.oschina.net',
-    capabilities: ['article', 'draft', 'image_upload'],
+    capabilities: ['article', 'draft', 'image_upload', 'table'],
   }
 
   /** 预处理配置: 开源中国使用 Markdown 格式 */

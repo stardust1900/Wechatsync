@@ -14,7 +14,7 @@ export class WoshipmAdapter extends CodeAdapter {
     name: '人人都是产品经理',
     icon: 'https://www.woshipm.com/favicon.ico',
     homepage: 'https://www.woshipm.com',
-    capabilities: ['article', 'draft', 'image_upload'],
+    capabilities: ['article', 'draft', 'image_upload', 'table'],
   }
 
   /** 预处理配置: 人人都是产品经理使用 HTML 格式 */

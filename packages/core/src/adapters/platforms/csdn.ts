@@ -20,7 +20,7 @@ export class CSDNAdapter extends CodeAdapter {
     name: 'CSDN',
     icon: 'https://g.csdnimg.cn/static/logo/favicon32.ico',
     homepage: 'https://editor.csdn.net/md/',
-    capabilities: ['article', 'draft', 'image_upload'],
+    capabilities: ['article', 'draft', 'image_upload', 'table'],
   }
 
   /** 预处理配置: CSDN 使用 Markdown 格式 */
