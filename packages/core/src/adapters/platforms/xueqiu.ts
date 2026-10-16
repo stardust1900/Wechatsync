@@ -59,39 +59,67 @@ export class XueqiuAdapter extends CodeAdapter {
       )
 
       const html = await response.text()
+      logger.warn(`[Xueqiu] writeV2 status=${response.status} len=${html.length}`)
 
-      // 解析 window.UOM_CURRENTUSER - 新版格式
-      const userMatch = html.match(/window\.UOM_CURRENTUSER\s*=\s*(\{[\s\S]*?\})\s*<\/script>/)
-      if (!userMatch) {
-        return { isAuthenticated: false }
+      // 解析 window.UOM_CURRENTUSER（容忍 } 后的分号/空白）
+      const userMatch = html.match(/window\.UOM_CURRENTUSER\s*=\s*(\{[\s\S]*?\})\s*;?\s*<\/script>/)
+      logger.warn(`[Xueqiu] UOM_CURRENTUSER 匹配: ${userMatch ? 'yes' : 'no'}`)
+
+      if (userMatch) {
+        try {
+          const state = JSON.parse(userMatch[1])
+          const { currentUser } = state
+
+          if (currentUser?.id) {
+            this.currentUser = currentUser
+
+            const avatar = currentUser.photo_domain && currentUser.profile_image_url
+              ? `https:${currentUser.photo_domain}${currentUser.profile_image_url.split(',')[0]}`
+              : ''
+
+            logger.warn(`[Xueqiu] 登录校验成功（HTML 内用户信息）`)
+            return {
+              isAuthenticated: true,
+              userId: String(currentUser.id),
+              username: currentUser.screen_name,
+              avatar,
+            }
+          }
+          logger.warn(`[Xueqiu] 匹配到但无 currentUser.id：${userMatch[1].slice(0, 200)}`)
+        } catch (e) {
+          logger.warn('[Xueqiu] 解析 UOM_CURRENTUSER 失败：', (e as Error).message)
+        }
       }
 
+      // 诊断：打印 HTML 片段与 cookie，便于定位新版 SPA 是否不再内嵌用户信息
+      logger.warn(`[Xueqiu] writeV2 片段：${html.slice(0, 400)}`)
       try {
-        const state = JSON.parse(userMatch[1])
-        const { currentUser } = state
+        const all = await this.runtime.cookies.get('xueqiu.com')
+        logger.warn(`[Xueqiu] xueqiu 域 cookie：${all.map((c) => `${c.domain}/${c.name}`).join(', ') || '(无)'}`)
+      } catch {
+        /* ignore */
+      }
 
-        if (!currentUser?.id) {
-          return { isAuthenticated: false }
+      // 兜底：HTML 未内嵌用户信息时，用雪球标准会话 cookie 判定登录态
+      const token = await this.runtime.getCookie?.('xueqiu.com', 'xq_a_token')
+      if (token) {
+        logger.warn('[Xueqiu] 命中 xq_a_token，判定已登录（HTML 未内嵌用户信息）')
+        this.currentUser = {
+          id: token,
+          screen_name: '雪球用户',
+          photo_domain: '',
+          profile_image_url: '',
         }
-
-        this.currentUser = currentUser
-
-        const avatar = currentUser.photo_domain && currentUser.profile_image_url
-          ? `https:${currentUser.photo_domain}${currentUser.profile_image_url.split(',')[0]}`
-          : ''
-
         return {
           isAuthenticated: true,
-          userId: String(currentUser.id),
-          username: currentUser.screen_name,
-          avatar,
+          userId: token,
+          username: '雪球用户',
         }
-      } catch (e) {
-        logger.error(' Failed to parse user data:', e)
-        return { isAuthenticated: false }
       }
+
+      return { isAuthenticated: false }
     } catch (error) {
-      logger.debug('checkAuth: not logged in -', error)
+      logger.warn('[Xueqiu] checkAuth 异常：', (error as Error).message)
       return { isAuthenticated: false, error: (error as Error).message }
     }
   }
