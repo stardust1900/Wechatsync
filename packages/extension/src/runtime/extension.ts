@@ -244,6 +244,10 @@ export class ExtensionRuntime implements RuntimeInterface {
       const result = results[0]?.result as T
       return result
     },
+
+    async remove(tabId: number): Promise<void> {
+      await chrome.tabs.remove(tabId)
+    },
   }
 
   /**

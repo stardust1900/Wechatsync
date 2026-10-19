@@ -273,14 +273,16 @@ export class DoubanAdapter extends CodeAdapter {
       logger.warn('runtime.tabs 不可用，无法读取 window.__INIT_STATE__（需浏览器环境）')
       return null
     }
+    let tabId: number | undefined
+    let createdByUs = false
     try {
-      let tabId: number | undefined
       const tabs = await this.runtime.tabs.query('*://*.douban.com/*')
       if (tabs.length > 0 && tabs[0].id != null) {
         tabId = tabs[0].id
       } else {
         const created = await this.runtime.tabs.create(this.EDITOR_URL, false)
         tabId = created.id
+        createdByUs = true
         await this.runtime.tabs.waitForLoad(tabId)
       }
 
@@ -304,6 +306,15 @@ export class DoubanAdapter extends CodeAdapter {
       logger.warn('等待 window.__INIT_STATE__.upload_auth_token 超时')
     } catch (e) {
       logger.warn('getDoubanState failed:', e)
+    } finally {
+      // 仅关闭我们为读取状态而新建的标签页，避免残留豆瓣编辑器页被浏览器会话恢复
+      if (createdByUs && tabId != null) {
+        try {
+          await this.runtime.tabs!.remove(tabId)
+        } catch {
+          /* ignore */
+        }
+      }
     }
     return null
   }

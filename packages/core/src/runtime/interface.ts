@@ -100,6 +100,10 @@ export interface RuntimeInterface {
       func: (...args: A) => T | Promise<T>,
       args: A
     ): Promise<T>
+    /**
+     * 关闭指定 tab
+     */
+    remove(tabId: number): Promise<void>
   }
 
   /**
