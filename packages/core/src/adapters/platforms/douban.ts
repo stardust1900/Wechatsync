@@ -75,11 +75,12 @@ export class DoubanAdapter extends CodeAdapter {
         return { isAuthenticated: false }
       }
 
-      // 尝试从已打开的豆瓣页读取用户名（可选，失败不影响登录态）
+      // 尝试从「已打开的」豆瓣页读取用户名（可选，失败不影响登录态）。
+      // 用 reuseOnly 模式：绝不主动打开新标签，避免扩展启动/预检时豆瓣页闪烁。
       let username = ''
       let avatar = ''
       try {
-        const state = await this.getDoubanState()
+        const state = await this.getDoubanState(true)
         if (state) {
           username = state.username || ''
           avatar = state.avatar || ''
@@ -294,9 +295,12 @@ export class DoubanAdapter extends CodeAdapter {
 
   /**
    * 读取 window.__INIT_STATE__（upload_auth_token / ck / 用户名等）。
-   * 优先复用已打开的豆瓣标签页；若不存在则自动打开写日记页并轮询等待 SPA 初始化。
+   * 优先复用已打开的豆瓣标签页；若不存在则：
+   *  - reuseOnly=false（默认，发布需要 token 时）：自动打开写日记页并轮询等待 SPA 初始化；
+   *  - reuseOnly=true（登录校验等只读场景）：不打开新标签，直接返回 null，
+   *    避免扩展启动/预检/打开弹窗时豆瓣页"打开又关闭"的闪烁。
    */
-  private async getDoubanState(): Promise<{
+  private async getDoubanState(reuseOnly = false): Promise<{
     upload_auth_token?: string
     ck?: string
     username?: string
@@ -312,11 +316,14 @@ export class DoubanAdapter extends CodeAdapter {
       const tabs = await this.runtime.tabs.query('*://*.douban.com/*')
       if (tabs.length > 0 && tabs[0].id != null) {
         tabId = tabs[0].id
-      } else {
+      } else if (!reuseOnly) {
         const created = await this.runtime.tabs.create(this.EDITOR_URL, false)
         tabId = created.id
         createdByUs = true
         await this.runtime.tabs.waitForLoad(tabId)
+      } else {
+        // 复用模式：当前没有打开的豆瓣页，不读取用户名（不影响登录态判定）
+        return null
       }
 
       for (let i = 0; i < 30; i++) {
