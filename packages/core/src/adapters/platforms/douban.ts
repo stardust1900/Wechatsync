@@ -146,6 +146,39 @@ export class DoubanAdapter extends CodeAdapter {
           b.data = { align: '', ...(b.data && typeof b.data === 'object' ? (b.data as Record<string, unknown>) : {}) }
         }
 
+        // 豆瓣草稿编辑器（draft.js）加载文档末尾的列表时会整段丢弃，且会剥离尾随
+        // 空块，导致文末「风险提示」等声明丢失。把末尾连续的列表项转成引用块
+        // （blockquote）——豆瓣对引用块不丢，内容不丢只是变成引用样式。
+        {
+          let lastListEnd = blocks.length
+          while (
+            lastListEnd > 0 &&
+            (blocks[lastListEnd - 1].type === 'unordered-list-item' ||
+              blocks[lastListEnd - 1].type === 'ordered-list-item')
+          ) {
+            lastListEnd--
+          }
+          if (lastListEnd < blocks.length) {
+            const quoteText = blocks
+              .slice(lastListEnd)
+              .map((b: any) => b.text || '')
+              .join('\n')
+            const head = blocks.slice(0, lastListEnd)
+            head.push({
+              key: `risk-quote-${Date.now()}`,
+              text: quoteText,
+              type: 'blockquote',
+              depth: 0,
+              entityRanges: [],
+              inlineStyleRanges: [],
+              data: { align: '' },
+            })
+            blocks.length = 0
+            blocks.push(...head)
+            logger.warn('[Douban] 文末列表已转引用块，避免被草稿编辑器丢弃')
+          }
+        }
+
         // 4. 收集图片 id（画廊）
         const imageIds: string[] = []
         for (const v of imageDataMap.values()) {
