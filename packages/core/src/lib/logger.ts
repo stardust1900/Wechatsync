@@ -23,9 +23,9 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   error: 3,
 }
 
-// 检测生产环境 (支持 Vite 和 Node.js)
-const isProd = typeof import.meta !== 'undefined' && (import.meta as unknown as { env?: { PROD?: boolean } }).env?.PROD
-  || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')
+// 检测生产环境：用 process.env.NODE_ENV（Vite 打包后会被静态替换为 'production'/'development'，
+// Node 下读取真实环境变量）。不使用 import.meta，避免 core 以 cjs 格式构建时报空 import.meta 告警。
+const isProd = typeof process !== 'undefined' && process.env?.NODE_ENV === 'production'
 
 // 默认配置：生产环境只输出 warn 和 error
 let globalConfig: LoggerConfig = {
