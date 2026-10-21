@@ -105,7 +105,10 @@ export function PlatformList({
       {/* Platform rows */}
       <div className="space-y-0.5">
         {visiblePlatforms.map(platform => {
-          const result = results.find(r => r.platform === platform.id)
+          // 空闲/加载态是「选择平台」视图：只按登录态渲染，不渲染上次同步的残留
+          // 结果（否则会出现红叉+报错混在选择列表里，与未登录灰色样式冲突）。
+          // 结果只在 syncing/completed 视图中展示。
+          const result = isIdle ? undefined : results.find(r => r.platform === platform.id)
           const progress = platformProgress.get(platform.id)
           const isSelected = selected.has(platform.id)
 

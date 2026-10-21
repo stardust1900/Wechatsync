@@ -61,13 +61,16 @@ export class DoubanAdapter extends CodeAdapter {
 
   async checkAuth(): Promise<AuthResult> {
     try {
-      // 登录态仅通过 Cookie 判定（最可靠，不依赖页面 HTML 结构）
+      // 登录态判定必须与「能否发布」对齐：发布需要 ck（优先取自页面
+      // window.__INIT_STATE__，Cookie 兜底）。若 Cookie 里 ck 缺失，说明登录态不完整，
+      // 此时按未登录处理——否则会出现「界面显示已登录，同步却报请先登录」的不一致，
+      // 且平台不会被归入未登录灰色列表。
       // 豆瓣会话 Cookie 为 dbcl2，登录后才会存在；ck 为登录态 CSRF Cookie
       let cookieAuth = false
       if (this.runtime.getCookie) {
         const dbcl2 = await this.runtime.getCookie('douban.com', 'dbcl2')
         const ck = await this.runtime.getCookie('douban.com', 'ck')
-        cookieAuth = !!(dbcl2 || ck)
+        cookieAuth = !!(dbcl2 && ck)
         logger.debug('cookieAuth:', cookieAuth, { hasDbcl2: !!dbcl2, hasCk: !!ck })
       }
 
@@ -105,12 +108,19 @@ export class DoubanAdapter extends CodeAdapter {
     try {
       logger.warn('[Douban] 开始发布...')
 
-      const ck = await this.getCk()
+      // ck 与 upload_auth_token 均来自页面运行时 window.__INIT_STATE__
+      // （Cookie 中的 ck 在部分登录态下缺失会误报"请先登录"）。一次性读取，
+      // 同时拿到两者，避免重复打开豆瓣页。
+      const state = await this.getDoubanState()
+      const ck =
+        state?.ck ||
+        (this.runtime.getCookie ? await this.runtime.getCookie('douban.com', 'ck') : null) ||
+        null
       if (!ck) {
         throw new Error('请先登录豆瓣')
       }
 
-      const uploadAuthToken = await this.getUploadAuthToken()
+      const uploadAuthToken = state?.upload_auth_token || null
       if (!uploadAuthToken) {
         throw new Error('未能获取豆瓣写日记所需凭证，请打开 ' + this.EDITOR_URL + ' 后重试')
       }
@@ -357,22 +367,6 @@ export class DoubanAdapter extends CodeAdapter {
       }
     }
     return null
-  }
-
-  /**
-   * 读取上传凭证 upload_auth_token（来自 window.__INIT_STATE__）
-   */
-  private async getUploadAuthToken(): Promise<string | null> {
-    const state = await this.getDoubanState()
-    return state?.upload_auth_token || null
-  }
-
-  /**
-   * 读取登录态 ck（Cookie）
-   */
-  private async getCk(): Promise<string | null> {
-    if (!this.runtime.getCookie) return null
-    return (await this.runtime.getCookie('douban.com', 'ck')) || null
   }
 
   /**
