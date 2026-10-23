@@ -5,6 +5,7 @@
 import { createLogger } from '../lib/logger'
 import { htmlToMarkdownNative } from '@wechatsync/core'
 import { preprocessContentString, backupAndSimplifyCodeBlocks, restoreCodeBlocks } from '../lib/content-processor'
+import { safeSendMessage, sendMessageSafe, safeGetURL, isContextValid } from '../lib/runtime-guard'
 
 const logger = createLogger('WeixinEditor')
 
@@ -95,26 +96,26 @@ async function openSyncDialog() {
   // 2. Extract article + load platforms in parallel
   const [article, platformResp] = await Promise.all([
     extractArticle(),
-    chrome.runtime.sendMessage({ type: 'CHECK_ALL_AUTH' }).catch(() => ({ platforms: [] })),
+    safeSendMessage({ type: 'CHECK_ALL_AUTH' }).then((r) => r ?? { platforms: [] }),
   ])
 
   if (!article) {
-    chrome.runtime.sendMessage({
+    sendMessageSafe({
       type: 'TRACK_ARTICLE_EXTRACT',
       payload: { source: 'weixin-editor', success: false },
-    }).catch(() => {})
+    })
     closeSyncDialog()
     return
   }
 
-  chrome.runtime.sendMessage({
+  sendMessageSafe({
     type: 'TRACK_ARTICLE_EXTRACT',
     payload: {
       source: 'weixin-editor', success: true,
       hasTitle: !!article.title, hasContent: !!article.content,
       hasCover: !!article.cover, contentLength: article.content?.length || 0,
     },
-  }).catch(() => {})
+  })
 
   const platforms = platformResp.platforms || []
 
@@ -123,7 +124,7 @@ async function openSyncDialog() {
   loadingEl.remove()
 
   dialogIframe = document.createElement('iframe')
-  dialogIframe.src = chrome.runtime.getURL('src/sync-dialog/index.html')
+  dialogIframe.src = safeGetURL('src/sync-dialog/index.html')
   dialogIframe.style.cssText = `
     width: 400px; height: 520px; border: none;
     border-radius: 12px; overflow: hidden;
@@ -158,14 +159,23 @@ function closeSyncDialog() {
 
 // Listen to messages from iframe
 window.addEventListener('message', (event) => {
+  if (!isContextValid()) return
+  // 仅处理来自同步对话框 iframe 的消息，忽略宿主页噪音（避免 JSON.parse 报错）
+  if (!dialogIframe || event.source !== dialogIframe.contentWindow) return
+  let data: any
   try {
-    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+    data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+  } catch {
+    return
+  }
+  if (!data || typeof data !== 'object' || typeof data.type !== 'string') return
 
+  try {
     if (data.type === 'CLOSE_SYNC_DIALOG') {
       closeSyncDialog()
     } else if (data.type === 'START_SYNC') {
       const syncId = data.syncId
-      chrome.runtime.sendMessage({
+      safeSendMessage({
         type: 'SYNC_ARTICLE',
         payload: {
           article: data.article,
@@ -193,7 +203,7 @@ window.addEventListener('message', (event) => {
 
 // Forward progress messages from background to iframe
 chrome.runtime.onMessage.addListener((message) => {
-  if (!dialogIframe) return
+  if (!isContextValid() || !dialogIframe) return
 
   if (message.type === 'SYNC_PROGRESS') {
     dialogIframe.contentWindow?.postMessage(JSON.stringify({
@@ -213,6 +223,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
 // Respond to popup's article extraction and panel expansion
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (!isContextValid()) return
   if (message.type === 'EXTRACT_ARTICLE' && isEditorPage()) {
     extractArticle().then(article => {
       sendResponse({ article })

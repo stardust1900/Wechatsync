@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { SyncDialog } from '@/components/sync-dialog'
 import type { Platform, SyncResult, PlatformProgress } from '@/components/sync-dialog/types'
 import { createLogger } from '../lib/logger'
+import { safeGetURL } from '../lib/runtime-guard'
 
 const logger = createLogger('Editor')
 
@@ -239,7 +240,7 @@ export function EditorApp() {
       <header className="fixed top-0 left-0 right-0 bg-white border-b shadow-sm z-50">
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <img src={chrome.runtime.getURL('assets/icon-48.png')} alt="Logo" className="w-6 h-6" />
+            <img src={safeGetURL('assets/icon-48.png')} alt="Logo" className="w-6 h-6" />
             <span className="font-medium text-gray-700">同步助手 - 点击内容可直接修改</span>
             {article?.extractor && (
               <span className="px-2 py-0.5 text-xs font-mono bg-gray-100 text-gray-500 rounded opacity-0 hover:opacity-100 transition-opacity" title="Content extractor used">

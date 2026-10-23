@@ -1,9 +1,10 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Github, Globe, Heart, MessageSquare, ExternalLink } from 'lucide-react'
+import { isContextValid } from '../../lib/runtime-guard'
 
 export function AboutPage() {
   const navigate = useNavigate()
-  const version = chrome.runtime.getManifest().version
+  const version = isContextValid() ? (chrome.runtime.getManifest()?.version ?? '') : ''
 
   return (
     <div className="flex flex-col h-[500px]">

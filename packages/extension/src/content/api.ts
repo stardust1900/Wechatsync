@@ -14,6 +14,7 @@
 
 import { htmlToMarkdownNative } from '@wechatsync/core'
 import { createLogger } from '../lib/logger'
+import { isContextValid, safeGetURL } from '../lib/runtime-guard'
 
 const logger = createLogger('Wechatsync')
 
@@ -76,6 +77,7 @@ function sendConsoleLog(args: unknown) {
  * 监听来自 background 的消息
  */
 chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
+  if (!isContextValid()) return
   try {
     // 过滤不相关的 syncId
     if (message.syncId && currentSyncId && message.syncId !== currentSyncId) {
@@ -146,6 +148,7 @@ chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
  * 监听来自页面的消息
  */
 window.addEventListener('message', async (evt) => {
+  if (!isContextValid()) return
   try {
     const action = JSON.parse(evt.data);
     if (!action.method) return;
@@ -293,7 +296,7 @@ window.addEventListener('message', async (evt) => {
 function injectAPI() {
   setTimeout(function() {
     const script = document.createElement('script');
-    script.src = chrome.runtime.getURL('inject-api.js');
+    script.src = safeGetURL('inject-api.js');
     script.onload = function() {
       script.remove();
     };

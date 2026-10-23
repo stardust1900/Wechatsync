@@ -10,6 +10,7 @@ import {
 } from '../../lib/analytics'
 import { checkSyncFrequency } from '../../lib/rate-limit'
 import { createLogger } from '../../lib/logger'
+import { safeSendMessage, sendMessageSafe, isContextValid } from '../../lib/runtime-guard'
 
 const logger = createLogger('SyncStore')
 
@@ -199,7 +200,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     if (get().recovered) return
 
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'GET_SYNC_STATE' })
+      const response = await safeSendMessage({ type: 'GET_SYNC_STATE' })
       const syncState = response?.syncState
 
       if (syncState) {
@@ -229,7 +230,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
   clearSyncState: async () => {
     try {
-      await chrome.runtime.sendMessage({ type: 'CLEAR_SYNC_STATE' })
+      await safeSendMessage({ type: 'CLEAR_SYNC_STATE' })
     } catch (error) {
       logger.error('Failed to clear sync state:', error)
     }
@@ -258,7 +259,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
     try {
       // CHECK_ALL_AUTH 现在返回 DSL 和 CMS 合并的列表
-      const platformResponse = await chrome.runtime.sendMessage({ type: 'CHECK_ALL_AUTH' })
+      const platformResponse = await safeSendMessage({ type: 'CHECK_ALL_AUTH' })
 
       // 只保留已认证的平台
       const allPlatforms: Platform[] = (platformResponse.platforms || [])
@@ -421,7 +422,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     try {
       // SYNC_ARTICLE 现在同时处理 DSL 和 CMS 平台
       // 传递 syncId 给 background，background 会用这个 ID
-      const response = await chrome.runtime.sendMessage({
+      const response = await safeSendMessage({
         type: 'SYNC_ARTICLE',
         payload: { article, platforms: selectedPlatforms, syncId },
       })
@@ -496,7 +497,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
     try {
       // SYNC_ARTICLE 现在同时处理 DSL 和 CMS 平台
-      const response = await chrome.runtime.sendMessage({
+      const response = await safeSendMessage({
         type: 'SYNC_ARTICLE',
         payload: { article, platforms: failedPlatformIds, skipHistory: true, syncId },
       })
@@ -547,7 +548,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       platformProgress: new Map(),
     })
     // 清除持久化的同步状态
-    chrome.runtime.sendMessage({ type: 'CLEAR_SYNC_STATE' }).catch(() => {})
+    sendMessageSafe({ type: 'CLEAR_SYNC_STATE' })
   },
 
   updateProgress: (result: SyncResult) => {
@@ -596,6 +597,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
 // 监听来自 background 的进度消息
 chrome.runtime.onMessage.addListener((message) => {
+  if (!isContextValid()) return
   // 获取当前 syncId，只处理匹配的消息
   const { currentSyncId } = useSyncStore.getState()
 

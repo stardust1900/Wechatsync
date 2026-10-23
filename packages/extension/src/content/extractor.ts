@@ -17,6 +17,7 @@ import { htmlToMarkdownNative, type PreprocessConfig } from '@wechatsync/core'
 import { createLogger } from '../lib/logger'
 import { preprocessContentDOM, preprocessForPlatform, backupAndSimplifyCodeBlocks, restoreCodeBlocks, type PreprocessResult } from '../lib/content-processor'
 import { createSyncFab } from '../lib/fab'
+import { sendMessageSafe, safeSendMessage, safeGetURL, isContextValid } from '../lib/runtime-guard'
 
 const logger = createLogger('Extractor')
 
@@ -910,7 +911,7 @@ function injectFloatingButton() {
   const btn = createSyncFab({
     onClick: () => {
       pendingLoading = showLoading()
-      chrome.runtime.sendMessage({ type: 'TRIGGER_OPEN_EDITOR' })
+      sendMessageSafe({ type: 'TRIGGER_OPEN_EDITOR' })
     },
   })
   btn.id = 'wechatsync-floating-btn'
@@ -999,7 +1000,7 @@ function openEditor(article: ExtractedArticle, platforms: any[], selectedPlatfor
 
   // 创建 iframe
   editorIframe = document.createElement('iframe')
-  editorIframe.src = chrome.runtime.getURL('src/editor/index.html')
+  editorIframe.src = safeGetURL('src/editor/index.html')
   editorIframe.style.cssText = `
     width: 100vw !important;
     height: 100vh !important;
@@ -1106,9 +1107,22 @@ function preprocessForMultiplePlatformsLocal(
  * 监听编辑器消息
  */
 window.addEventListener('message', async (event) => {
+  // 扩展上下文失效（重载/更新）后，旧内容脚本仍在页面，发出的 chrome.runtime
+  // 调用无意义，直接丢弃，避免抛出未捕获的 Extension context invalidated
+  if (!isContextValid()) return
+  // 仅处理来自编辑器 iframe 的消息，忽略宿主页面 / 其它脚本发来的噪音
+  // （否则空串或非 JSON 文本会触发 JSON.parse 报 "Unexpected end of JSON input"）
+  if (!editorIframe || event.source !== editorIframe.contentWindow) return
+  let data: any
   try {
-    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+    data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+  } catch {
+    // 非 JSON 文本（多为宿主页噪音），直接忽略
+    return
+  }
+  if (!data || typeof data !== 'object' || typeof data.type !== 'string') return
 
+  try {
     if (data.type === 'CLOSE_EDITOR') {
       closeEditor()
     } else if (data.type === 'START_SYNC') {
@@ -1120,7 +1134,7 @@ window.addEventListener('message', async (event) => {
       const platforms: string[] = data.platforms || []
 
       // 从 background 获取各平台的预处理配置
-      const configResponse = await chrome.runtime.sendMessage({
+      const configResponse = await safeSendMessage({
         type: 'GET_PREPROCESS_CONFIGS',
         platforms,
       })
@@ -1132,7 +1146,7 @@ window.addEventListener('message', async (event) => {
 
       logger.debug('Preprocessed contents for platforms:', Object.keys(platformContents))
 
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         type: 'START_SYNC_FROM_EDITOR',
         article: {
           ...data.article,

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createLogger } from '../../lib/logger'
+import { safeSendMessage } from '../../lib/runtime-guard'
 
 const logger = createLogger('CMSStore')
 
@@ -59,7 +60,7 @@ export const useCMSStore = create<CMSState>((set) => ({
       }
 
       // 测试连接
-      const testResult = await chrome.runtime.sendMessage({
+      const testResult = await safeSendMessage({
         type: 'TEST_CMS_CONNECTION',
         payload: {
           type: accountData.type,
@@ -67,7 +68,7 @@ export const useCMSStore = create<CMSState>((set) => ({
           username: accountData.username,
           password: accountData.password,
         },
-      })
+      }) || { success: false, error: '扩展上下文已失效，请重试' }
 
       if (!testResult.success) {
         return { success: false, error: testResult.error || '连接失败' }
@@ -115,7 +116,7 @@ export const useCMSStore = create<CMSState>((set) => ({
 
       const password = storage[`cms_pwd_${id}`]
 
-      const result = await chrome.runtime.sendMessage({
+      const result = await safeSendMessage({
         type: 'TEST_CMS_CONNECTION',
         payload: {
           type: account.type,
