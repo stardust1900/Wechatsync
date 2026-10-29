@@ -61,24 +61,21 @@ export class DoubanAdapter extends CodeAdapter {
 
   async checkAuth(): Promise<AuthResult> {
     try {
-      // 登录态判定必须与「能否发布」对齐：发布需要 ck（优先取自页面
-      // window.__INIT_STATE__，Cookie 兜底）。若 Cookie 里 ck 缺失，说明登录态不完整，
-      // 此时按未登录处理——否则会出现「界面显示已登录，同步却报请先登录」的不一致，
-      // 且平台不会被归入未登录灰色列表。
-      // 豆瓣会话 Cookie 为 dbcl2，登录后才会存在；ck 为登录态 CSRF Cookie
-      let cookieAuth = false
+      // 会话 Cookie dbcl2 是登录态的权威依据（登录后稳定存在）。
+      // ck 只是发布所需的 CSRF 凭证，且发布时优先从页面 window.__INIT_STATE__
+      // 读取（见 publish），Cookie 中的 ck 在部分登录态下会缺失。若据此判定登录，
+      // 会出现「已登录却偶发显示未登录」的抖动，故登录判定只依赖 dbcl2。
+      let dbcl2 = ''
       if (this.runtime.getCookie) {
-        const dbcl2 = await this.runtime.getCookie('douban.com', 'dbcl2')
-        const ck = await this.runtime.getCookie('douban.com', 'ck')
-        cookieAuth = !!(dbcl2 && ck)
-        logger.debug('cookieAuth:', cookieAuth, { hasDbcl2: !!dbcl2, hasCk: !!ck })
+        dbcl2 = (await this.runtime.getCookie('douban.com', 'dbcl2')) || ''
       }
+      logger.debug('cookieAuth (dbcl2):', !!dbcl2)
 
-      if (!cookieAuth) {
+      if (!dbcl2) {
         return { isAuthenticated: false }
       }
 
-      // 尝试从「已打开的」豆瓣页读取用户名（可选，失败不影响登录态）。
+      // 尝试从「已打开的」豆瓣页读取用户名 / 头像（可选，失败不影响登录态）。
       // 用 reuseOnly 模式：绝不主动打开新标签，避免扩展启动/预检时豆瓣页闪烁。
       let username = ''
       let avatar = ''
