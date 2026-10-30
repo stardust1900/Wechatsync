@@ -53,18 +53,40 @@ export class WeiboAdapter extends CodeAdapter {
 
   async checkAuth(): Promise<AuthResult> {
     try {
-      const config = await this.getUserConfig()
-
-      if (config?.uid) {
-        return {
-          isAuthenticated: true,
-          userId: config.uid,
-          username: config.nick,
-          avatar: config.avatar_large,
-        }
+      // 会话 Cookie SUB 是微博登录态的权威依据（登录后稳定存在）。
+      // 原实现依赖「网络拉取 card.weibo.com 编辑器页 + 正则抠 config」判断登录，
+      // 一旦网络波动或页面结构变化就会误判为未登录，并被 authCache 以 30s TTL 缓存，
+      // 导致界面偶发显示「未登录」。改为以 SUB 为主信号，同步可靠、不受网络/页面影响。
+      let sub = ''
+      if (this.runtime.getCookie) {
+        sub = (await this.runtime.getCookie('weibo.com', 'SUB')) || ''
       }
 
-      return { isAuthenticated: false }
+      if (!sub) {
+        return { isAuthenticated: false }
+      }
+
+      // 已登录：尽力补充昵称 / 头像（失败不影响登录态）
+      let username = ''
+      let avatar = ''
+      let uid = ''
+      try {
+        const config = await this.getUserConfig()
+        if (config) {
+          uid = config.uid
+          username = config.nick
+          avatar = config.avatar_large
+        }
+      } catch {
+        // 忽略：昵称/头像仅用于展示
+      }
+
+      return {
+        isAuthenticated: true,
+        userId: uid || username,
+        username,
+        avatar,
+      }
     } catch (error) {
       logger.debug('checkAuth: not logged in -', error)
       return { isAuthenticated: false, error: (error as Error).message }
